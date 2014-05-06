@@ -79,6 +79,8 @@ module XeroGateway
             handle_oauth_error!(response)
           when 404
             handle_object_not_found!(response, url)
+          when 503
+            handle_service_unavailable_error!(response)
           else
             raise "Unknown response code: #{response.code.to_i}"
         end
@@ -96,7 +98,6 @@ module XeroGateway
           when "token_expired"        then raise OAuth::TokenExpired.new(description)
           when "consumer_key_unknown" then raise OAuth::TokenInvalid.new(description)
           when "token_rejected"       then raise OAuth::TokenInvalid.new(description)
-          when "rate limit exceeded"  then raise OAuth::RateLimitExceeded.new(description)
           else raise OAuth::UnknownError.new(error_details["oauth_problem"].first + ':' + description)
         end
       end
@@ -135,5 +136,14 @@ module XeroGateway
         end
       end
 
+      def handle_service_unavailable_error!(response)
+        error_details = CGI.parse(response.plain_body)
+        description = error_details["oauth_problem_advice"].try(:first)
+
+        case (error_details["oauth_problem"].try(:first))
+        when "rate limit exceeded" then raise OAuth::RateLimitExceeded.new(description)
+        else raise "Unknown response code: #{response.code.to_i}"
+        end
+      end
   end
 end
